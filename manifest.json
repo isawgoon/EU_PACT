@@ -1,3 +1,19 @@
-list.files()
-rsconnect::writeManifest()
-list.files()
+{
+  "version": 1,
+  "locale": "en_US",
+  "platform": "4.4.3",
+  "metadata": {
+    "appmode": "static",
+    "primary_rmd": null,
+    "primary_html": "index.html",
+    "content_category": null,
+    "has_parameters": false
+  },
+  "packages": null,
+  "files": {
+    "index.html": {
+      "checksum": "382bac6a43fff86a41404d262d81c8cb"
+    }
+  },
+  "users": null
+}
