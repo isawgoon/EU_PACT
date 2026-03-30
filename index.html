@@ -194,9 +194,10 @@
     stroke-width: 0.8px;
     cursor: pointer;
     transition: opacity 0.15s, filter 0.15s;
+    vector-effect: non-scaling-stroke;
   }
   .country-path:hover { opacity: 0.8; filter: brightness(1.1); stroke-width: 1.5px; stroke: white; }
-  .country-path.active-country { stroke: #1a3a5c; stroke-width: 2px; }
+  .country-path.active-country { stroke: white; stroke-width: 2px; }
   .country-path.no-data { fill: #d5dce3; cursor: default; }
   .country-path.no-data:hover { opacity: 1; filter: none; stroke-width: 0.8px; }
 
@@ -247,6 +248,49 @@
     padding: 4px 8px;
     border-radius: 6px;
   }
+
+  /* MAP ZOOM CONTROLS */
+  .map-zoom-controls {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 10;
+  }
+  .map-zoom-btn {
+    width: 28px;
+    height: 28px;
+    background: rgba(255,255,255,0.95);
+    border: 1px solid #dde3ea;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    color: var(--primary);
+    font-weight: 700;
+    transition: background 0.15s;
+  }
+  .map-zoom-btn:hover { background: var(--primary); color: white; }
+
+  /* MAP COUNTRY SEARCH */
+  .map-country-select {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border: 1px solid #dde3ea;
+    border-radius: 6px;
+    background: white;
+    color: var(--text);
+    cursor: pointer;
+    min-width: 160px;
+    outline: none;
+  }
+  .map-country-select:focus { border-color: var(--primary-light); }
 
   /* DETAIL PANEL */
   .detail-card {
@@ -653,11 +697,21 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
         Activity Status by Country
       </div>
-      <div style="font-size:0.72rem;color:var(--text-muted)" id="map-subtitle">Aggregate score · All partners · All themes</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div style="font-size:0.72rem;color:var(--text-muted)" id="map-subtitle">Aggregate score · All partners · All themes</div>
+        <select class="map-country-select" id="map-country-select" onchange="onMapCountrySelect(this.value)">
+          <option value="">— Jump to country —</option>
+        </select>
+      </div>
     </div>
     <div id="map-container">
       <div id="tooltip"></div>
-      <div class="map-hint">Click a country for details</div>
+      <div class="map-zoom-controls">
+        <button class="map-zoom-btn" onclick="mapZoom(1.4)" title="Zoom in">+</button>
+        <button class="map-zoom-btn" onclick="mapZoom(1/1.4)" title="Zoom out">−</button>
+        <button class="map-zoom-btn" onclick="mapZoomReset()" title="Reset zoom" style="font-size:0.65rem;font-weight:600;">⌂</button>
+      </div>
+      <div class="map-hint">Scroll or use +/− to zoom · Click a country for details</div>
       <div class="map-legend">
         <div class="legend-title">Activity Status</div>
         <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div><span class="legend-label">In Place</span></div>
@@ -922,7 +976,27 @@ function updateStats() {
 }
 
 // ==================== MAP ====================
+// Disputed/unrecognised territories: map geographic bounding boxes to sovereign country names.
+// Northern Cyprus (TRNC) has ISO_N3 = -99 in Natural Earth and won't match COUNTRY_ISO.
+const DISPUTED_BBOX = [
+  { country: 'Cyprus', lonMin: 32.0, lonMax: 35.0, latMin: 34.4, latMax: 35.8 }
+];
+
+function resolveCountry(feature) {
+  const iso = feature.id?.toString();
+  const direct = ISO_TO_COUNTRY[iso];
+  if (direct) return direct;
+  // Fallback: check geographic centroid against known disputed territory boxes
+  const [lon, lat] = d3.geoCentroid(feature);
+  for (const b of DISPUTED_BBOX) {
+    if (lon >= b.lonMin && lon <= b.lonMax && lat >= b.latMin && lat <= b.latMax) return b.country;
+  }
+  return null;
+}
+
 let svgMap = null;
+let svgMapG = null;
+let mapZoomBehaviour = null;
 let projection = null;
 
 async function initMap() {
@@ -940,35 +1014,44 @@ async function initMap() {
 
   svgMap = d3.select('#map-container').append('svg')
     .attr('width', W)
-    .attr('height', H);
+    .attr('height', H)
+    .style('cursor', 'grab');
 
-  // Ocean background
+  // Ocean background (non-zoomable)
   svgMap.append('rect').attr('width', W).attr('height', H).attr('fill', '#cce8f7');
 
-  const world = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+  // Group that zoom transforms will be applied to
+  svgMapG = svgMap.append('g');
+
+  // D3 zoom
+  mapZoomBehaviour = d3.zoom()
+    .scaleExtent([0.5, 12])
+    .on('zoom', (event) => {
+      svgMapG.attr('transform', event.transform);
+    });
+  svgMap.call(mapZoomBehaviour);
+
+  const world = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json');
   const countries = topojson.feature(world, world.objects.countries);
 
   const tooltip = document.getElementById('tooltip');
 
-  svgMap.selectAll('.country-path')
+  svgMapG.selectAll('.country-path')
     .data(countries.features)
     .join('path')
     .attr('class', d => {
-      const iso = d.id?.toString();
-      const country = ISO_TO_COUNTRY[iso];
+      const country = resolveCountry(d);
       return 'country-path' + (country ? '' : ' no-data');
     })
     .attr('d', path)
     .attr('fill', d => {
-      const iso = d.id?.toString();
-      const country = ISO_TO_COUNTRY[iso];
+      const country = resolveCountry(d);
       if (!country) return '#d5dce3';
       const score = getCountryScore(country, getFiltered());
       return score === 'g' ? '#2ecc71' : score === 'y' ? '#f1c40f' : score === 'r' ? '#e74c3c' : '#d5dce3';
     })
     .on('mousemove', (event, d) => {
-      const iso = d.id?.toString();
-      const country = ISO_TO_COUNTRY[iso];
+      const country = resolveCountry(d);
       if (!country) return;
       const data = getFiltered().filter(r => r.country === country);
       const g = data.filter(r => r.value === 'g').length;
@@ -988,32 +1071,69 @@ async function initMap() {
     })
     .on('mouseleave', () => { tooltip.style.display = 'none'; })
     .on('click', (event, d) => {
-      const iso = d.id?.toString();
-      const country = ISO_TO_COUNTRY[iso];
+      const country = resolveCountry(d);
       if (!country) return;
       selectCountry(country);
     });
+
+  // Populate country dropdown
+  const sel = document.getElementById('map-country-select');
+  COUNTRIES.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    sel.appendChild(opt);
+  });
+}
+
+function mapZoom(factor) {
+  if (!svgMap || !mapZoomBehaviour) return;
+  svgMap.transition().duration(300).call(mapZoomBehaviour.scaleBy, factor);
+}
+
+function mapZoomReset() {
+  if (!svgMap || !mapZoomBehaviour) return;
+  svgMap.transition().duration(400).call(mapZoomBehaviour.transform, d3.zoomIdentity);
+}
+
+function onMapCountrySelect(country) {
+  if (!country) return;
+  selectCountry(country);
+  // Pan & zoom to the selected country path
+  const node = svgMapG.selectAll('.country-path')
+    .filter(d => ISO_TO_COUNTRY[d.id?.toString()] === country)
+    .node();
+  if (!node) return;
+  const container = document.getElementById('map-container');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  const bounds = node.getBBox();
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  const scale = Math.min(8, 0.9 / Math.max(bounds.width / W, bounds.height / H));
+  const tx = W / 2 - scale * cx;
+  const ty = H / 2 - scale * cy;
+  svgMap.transition().duration(600)
+    .call(mapZoomBehaviour.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+  // Reset dropdown to placeholder after selection
+  document.getElementById('map-country-select').value = '';
 }
 
 function updateMapColors() {
-  if (!svgMap) return;
+  if (!svgMapG) return;
   const filtered = getFiltered();
-  svgMap.selectAll('.country-path')
+  svgMapG.selectAll('.country-path')
     .transition().duration(300)
     .attr('fill', d => {
-      const iso = d.id?.toString();
-      const country = ISO_TO_COUNTRY[iso];
+      const country = resolveCountry(d);
       if (!country) return '#d5dce3';
       const score = getCountryScore(country, filtered);
       return score === 'g' ? '#2ecc71' : score === 'y' ? '#f1c40f' : score === 'r' ? '#e74c3c' : '#d5dce3';
     });
 
   // Update active country border
-  svgMap.selectAll('.country-path')
-    .classed('active-country', d => {
-      const iso = d.id?.toString();
-      return ISO_TO_COUNTRY[iso] === state.selectedCountry;
-    });
+  svgMapG.selectAll('.country-path')
+    .classed('active-country', d => resolveCountry(d) === state.selectedCountry);
 
   // Update subtitle
   const parts = [];
