@@ -1,0 +1,3 @@
+list.files()
+rsconnect::writeManifest()
+list.files()
