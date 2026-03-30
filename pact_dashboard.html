@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PACT Implementation Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #2ecc71;
+    --green-dark: #27ae60;
+    --yellow: #f1c40f;
+    --yellow-dark: #d4ac0d;
+    --red: #e74c3c;
+    --red-dark: #c0392b;
+    --gray: #bdc3c7;
+    --primary: #1a3a5c;
+    --primary-light: #2980b9;
+    --bg: #f0f4f8;
+    --card-bg: #ffffff;
+    --text: #2c3e50;
+    --text-muted: #7f8c8d;
+    --border: #dde3ea;
+    --shadow: 0 2px 12px rgba(0,0,0,0.08);
+    --shadow-hover: 0 6px 24px rgba(0,0,0,0.14);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, var(--primary) 0%, #0d2137 100%);
+    color: white;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.2);
+  }
+  header .logo {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px; font-weight: 700; color: white; letter-spacing: -1px;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; }
+  header p { font-size: 0.78rem; opacity: 0.7; margin-top: 2px; }
+  header .badge {
+    margin-left: auto;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  /* FILTERS */
+  .filters-bar {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .filter-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .filter-btn {
+    padding: 5px 13px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    background: white;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .filter-btn:hover { border-color: var(--primary-light); color: var(--primary-light); }
+  .filter-btn.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+    box-shadow: 0 2px 6px rgba(26,58,92,0.3);
+  }
+  .filter-select {
+    padding: 5px 28px 5px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    background: white;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237f8c8d'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    font-family: inherit;
+  }
+  .filter-select:focus { outline: none; border-color: var(--primary-light); }
+  .filter-divider { width: 1px; height: 24px; background: var(--border); }
+  .reset-btn {
+    margin-left: auto;
+    padding: 5px 14px;
+    border: 1.5px solid #e74c3c44;
+    border-radius: 20px;
+    background: white;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    color: #e74c3c;
+    transition: all 0.15s;
+  }
+  .reset-btn:hover { background: #e74c3c; color: white; border-color: #e74c3c; }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    grid-template-rows: auto auto;
+    gap: 20px;
+    padding: 20px 32px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  /* CARDS */
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-title svg { opacity: 0.6; }
+  .card-body { padding: 16px; }
+
+  /* MAP */
+  .map-card { grid-column: 1; grid-row: 1; }
+  #map-container {
+    width: 100%;
+    height: 520px;
+    position: relative;
+    overflow: hidden;
+    background: #e8f4fb;
+  }
+  #map-container svg { width: 100%; height: 100%; }
+  .country-path {
+    stroke: white;
+    stroke-width: 0.8px;
+    cursor: pointer;
+    transition: opacity 0.15s, filter 0.15s;
+  }
+  .country-path:hover { opacity: 0.8; filter: brightness(1.1); stroke-width: 1.5px; stroke: white; }
+  .country-path.active-country { stroke: #1a3a5c; stroke-width: 2px; }
+  .country-path.no-data { fill: #d5dce3; cursor: default; }
+  .country-path.no-data:hover { opacity: 1; filter: none; stroke-width: 0.8px; }
+
+  /* MAP LEGEND */
+  .map-legend {
+    position: absolute;
+    bottom: 14px;
+    left: 14px;
+    background: rgba(255,255,255,0.95);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.72rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .legend-title { font-weight: 600; color: var(--primary); margin-bottom: 2px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.4px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .legend-label { color: var(--text); }
+
+  /* MAP TOOLTIP */
+  #tooltip {
+    position: fixed;
+    background: rgba(20,40,60,0.92);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    pointer-events: none;
+    z-index: 1000;
+    max-width: 200px;
+    display: none;
+    backdrop-filter: blur(4px);
+  }
+  #tooltip .tt-country { font-weight: 600; font-size: 0.82rem; margin-bottom: 4px; }
+  #tooltip .tt-stat { display: flex; gap: 6px; align-items: center; }
+
+  /* MAP WATERMARK */
+  .map-hint {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.85);
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+
+  /* DETAIL PANEL */
+  .detail-card {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 460px;
+    gap: 12px;
+    color: var(--text-muted);
+  }
+  .detail-placeholder svg { opacity: 0.3; }
+  .detail-placeholder p { font-size: 0.82rem; text-align: center; max-width: 200px; }
+  #detail-content { display: none; }
+  #detail-country-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+    padding: 14px 20px 10px;
+  }
+
+  /* DETAIL TABLE */
+  .detail-table-wrap { overflow-y: auto; max-height: 340px; padding: 0 16px; }
+  .detail-section-title {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+    margin: 10px 0 6px;
+  }
+  .detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+  }
+  .detail-table th {
+    background: #f7f9fb;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .detail-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #f0f3f6;
+    vertical-align: middle;
+  }
+  .detail-table tr:last-child td { border-bottom: none; }
+  .detail-table tr:hover td { background: #f7f9fb; }
+  .theme-cell { max-width: 200px; word-break: break-word; line-height: 1.3; }
+
+  /* STATUS BADGES */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .status-g { background: #e8faf0; color: #1a7a4a; }
+  .status-y { background: #fef9e7; color: #9a7d0a; }
+  .status-r { background: #fdecea; color: #a93226; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .dot-g { background: var(--green); }
+  .dot-y { background: var(--yellow); }
+  .dot-r { background: var(--red); }
+
+  /* COMMENTS */
+  .comment-item {
+    background: #f8fafc;
+    border-left: 3px solid var(--primary-light);
+    padding: 7px 10px;
+    margin-bottom: 6px;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--text);
+  }
+
+  /* STATS CARDS */
+  .stats-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .stat-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: box-shadow 0.2s;
+  }
+  .stat-card:hover { box-shadow: var(--shadow-hover); }
+  .stat-icon {
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .stat-icon.green { background: #e8faf0; }
+  .stat-icon.yellow { background: #fef9e7; }
+  .stat-icon.red { background: #fdecea; }
+  .stat-icon.blue { background: #eaf4fb; }
+  .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+  .stat-label { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+  .stat-value.green { color: var(--green-dark); }
+  .stat-value.yellow { color: var(--yellow-dark); }
+  .stat-value.red { color: var(--red-dark); }
+  .stat-value.blue { color: var(--primary-light); }
+
+  /* DATA TABLE */
+  .table-card {
+    grid-column: 1 / -1;
+    margin-top: 0;
+  }
+  .data-table-wrap { overflow-x: auto; }
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  table.data-table th {
+    background: #f0f4f8;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+    padding: 10px 14px;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  table.data-table th:hover { color: var(--primary); }
+  table.data-table th .sort-icon { opacity: 0.4; margin-left: 4px; }
+  table.data-table th.sorted .sort-icon { opacity: 1; color: var(--primary); }
+  table.data-table td {
+    padding: 8px 14px;
+    border-bottom: 1px solid #f0f3f6;
+    vertical-align: middle;
+  }
+  table.data-table tr:hover td { background: #f7f9fb; }
+  .table-search {
+    padding: 6px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-family: inherit;
+    width: 220px;
+    color: var(--text);
+  }
+  .table-search:focus { outline: none; border-color: var(--primary-light); }
+  .pager { display: flex; align-items: center; gap: 6px; }
+  .pager-btn {
+    padding: 4px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: white;
+    font-size: 0.75rem;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text);
+    transition: all 0.15s;
+  }
+  .pager-btn:hover:not(:disabled) { border-color: var(--primary-light); color: var(--primary-light); }
+  .pager-btn:disabled { opacity: 0.4; cursor: default; }
+  .pager-info { font-size: 0.72rem; color: var(--text-muted); }
+
+  /* HEATMAP */
+  .heatmap-card { grid-column: 1 / -1; }
+  .heatmap-wrap { overflow-x: auto; padding-bottom: 4px; }
+  table.heatmap-table {
+    border-collapse: collapse;
+    font-size: 0.72rem;
+    width: 100%;
+    min-width: 860px;
+  }
+  table.heatmap-table th.hm-corner {
+    background: #f0f4f8;
+    border: 1px solid var(--border);
+    min-width: 130px;
+    width: 130px;
+    padding: 6px 10px;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    vertical-align: bottom;
+  }
+  table.heatmap-table th.hm-theme {
+    background: #f0f4f8;
+    border: 1px solid var(--border);
+    width: 80px;
+    max-width: 90px;
+    padding: 0;
+    vertical-align: bottom;
+    position: relative;
+  }
+  table.heatmap-table th.hm-theme .hm-theme-inner {
+    display: block;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    padding: 10px 6px 8px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    max-height: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.heatmap-table td.hm-country {
+    background: #f7f9fb;
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--primary);
+    cursor: pointer;
+    white-space: nowrap;
+    min-width: 130px;
+  }
+  table.heatmap-table td.hm-country:hover { background: #eaf2fb; color: var(--primary-light); }
+  table.heatmap-table td.hm-cell {
+    border: 1px solid rgba(255,255,255,0.7);
+    text-align: center;
+    padding: 0;
+    width: 80px;
+    height: 36px;
+    cursor: default;
+    transition: opacity 0.12s, filter 0.12s;
+    font-size: 0.8rem;
+    font-weight: 700;
+    vertical-align: middle;
+  }
+  table.heatmap-table td.hm-cell:hover { opacity: 0.75; filter: brightness(1.08); }
+  .cell-g { background: #2ecc71; color: white; }
+  .cell-y { background: #f1c40f; color: #7d6608; }
+  .cell-r { background: #e74c3c; color: white; }
+  .cell-empty { background: #f0f4f8; color: #c0c8d0; }
+  .hm-has-note { font-size: 0.62rem; vertical-align: super; margin-left: 2px; opacity: 0.7; }
+
+  /* NOTES VIEW */
+  .notes-card { grid-column: 1 / -1; }
+  .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; padding: 16px; }
+  .note-country-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .note-country-header {
+    background: #f0f4f8;
+    padding: 8px 14px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .note-country-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+  .note-item {
+    background: #f8fafc;
+    border-left: 3px solid var(--primary-light);
+    padding: 6px 10px;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.75rem;
+    line-height: 1.55;
+    color: var(--text);
+  }
+
+  /* PARTNER TABS for heatmap */
+  .tab-group { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tab-btn {
+    padding: 4px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 6px;
+    background: white;
+    font-size: 0.72rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text);
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { border-color: var(--primary-light); color: var(--primary-light); }
+  .tab-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+
+  /* Progress bars */
+  .progress-bar-wrap { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; width: 120px; background: #f0f3f6; }
+  .progress-seg { height: 100%; transition: width 0.3s; }
+
+  /* Country score badge */
+  .score-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  @media (max-width: 1100px) {
+    .main { grid-template-columns: 1fr; padding: 16px; }
+    .detail-card { grid-column: 1; grid-row: 2; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    header { padding: 14px 16px; }
+    .filters-bar { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">P</div>
+  <div>
+    <h1>PACT Implementation Mapping</h1>
+    <p>International Organizations &amp; EUAA Activity Tracking across EU Member States</p>
+  </div>
+  <div class="badge">EU-27 Coverage · 2025</div>
+</header>
+
+<div class="filters-bar">
+  <span class="filter-label">Partner</span>
+  <div class="filter-group" id="partner-filters"></div>
+  <div class="filter-divider"></div>
+  <span class="filter-label">Theme</span>
+  <select class="filter-select" id="theme-filter">
+    <option value="">All Themes</option>
+  </select>
+  <div class="filter-divider"></div>
+  <span class="filter-label">View</span>
+  <div class="filter-group">
+    <button class="filter-btn active" id="view-map" onclick="switchView('map')">Map</button>
+    <button class="filter-btn" id="view-heatmap" onclick="switchView('heatmap')">Heatmap</button>
+    <button class="filter-btn" id="view-table" onclick="switchView('table')">Table</button>
+    <button class="filter-btn" id="view-notes" onclick="switchView('notes')">💬 Notes</button>
+  </div>
+  <button class="reset-btn" onclick="resetFilters()">✕ Reset</button>
+</div>
+
+<div class="main" id="main-content">
+  <!-- STATS ROW -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon blue">🌍</div>
+      <div>
+        <div class="stat-value blue" id="stat-countries">26</div>
+        <div class="stat-label">Countries Covered</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green">✅</div>
+      <div>
+        <div class="stat-value green" id="stat-green">–</div>
+        <div class="stat-label">Activities in Place</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon yellow">⚠️</div>
+      <div>
+        <div class="stat-value yellow" id="stat-yellow">–</div>
+        <div class="stat-label">Partially in Place</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon red">❌</div>
+      <div>
+        <div class="stat-value red" id="stat-red">–</div>
+        <div class="stat-label">Not in Place</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP VIEW -->
+  <div class="card map-card" id="map-view">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+        Activity Status by Country
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted)" id="map-subtitle">Aggregate score · All partners · All themes</div>
+    </div>
+    <div id="map-container">
+      <div id="tooltip"></div>
+      <div class="map-hint">Click a country for details</div>
+      <div class="map-legend">
+        <div class="legend-title">Activity Status</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div><span class="legend-label">In Place</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div><span class="legend-label">Partially in Place</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div><span class="legend-label">Not in Place</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d5dce3"></div><span class="legend-label">No Data / Non-EU</span></div>
+      </div>
+    </div>
+    <div style="font-size:0.65rem;color:var(--text-muted);padding:6px 10px 4px;line-height:1.4;border-top:1px solid #e5e9ef;">
+      The boundaries and names shown and the designations used on the maps on this site do not imply official endorsement or acceptance by the United Nations. Serbia and Kosovo (S/RES/1244 [1999]).
+    </div>
+  </div>
+
+  <!-- DETAIL PANEL -->
+  <div class="card detail-card" id="detail-card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Country Detail
+      </div>
+    </div>
+    <div id="detail-placeholder" class="detail-placeholder">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><circle cx="12" cy="11" r="3"/></svg>
+      <p>Click a country on the map to explore its PACT implementation data</p>
+    </div>
+    <div id="detail-content">
+      <div id="detail-country-name"></div>
+      <div class="detail-table-wrap" id="detail-table-wrap"></div>
+    </div>
+  </div>
+
+  <!-- HEATMAP VIEW -->
+  <div class="card heatmap-card" id="heatmap-view" style="display:none">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        Country × Theme Matrix
+      </div>
+      <div class="tab-group" id="heatmap-partner-tabs"></div>
+    </div>
+    <div class="card-body" style="padding:12px 16px 16px">
+      <div style="font-size:0.72rem;color:var(--text-muted);margin-bottom:10px">
+        Showing status per theme for selected partner. <span style="color:var(--primary-light);font-weight:500">💬 = country has notes.</span>
+        Hover cells for details.
+      </div>
+      <div class="heatmap-wrap">
+        <table class="heatmap-table" id="heatmap-table"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTES VIEW -->
+  <div class="card notes-card" id="notes-view" style="display:none">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Country Notes &amp; Context
+        <span style="font-size:0.7rem;font-weight:400;color:var(--text-muted)">(from Data_Comments sheet)</span>
+      </div>
+      <div style="font-size:0.72rem;color:var(--text-muted)" id="notes-count"></div>
+    </div>
+    <div class="notes-grid" id="notes-grid"></div>
+  </div>
+
+  <!-- TABLE VIEW -->
+  <div class="card table-card" id="table-view" style="display:none">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        Full Dataset
+        <span id="table-count" style="font-size:0.7rem;font-weight:500;color:var(--text-muted)"></span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" class="table-search" id="table-search" placeholder="Search country, theme, partner…" oninput="filterTable()">
+        <div class="pager">
+          <button class="pager-btn" id="prev-btn" onclick="changePage(-1)">‹ Prev</button>
+          <span class="pager-info" id="pager-info"></span>
+          <button class="pager-btn" id="next-btn" onclick="changePage(1)">Next ›</button>
+        </div>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div class="data-table-wrap">
+        <table class="data-table" id="data-table">
+          <thead>
+            <tr>
+              <th onclick="sortTable('country')">Country <span class="sort-icon">↕</span></th>
+              <th onclick="sortTable('theme')">Theme <span class="sort-icon">↕</span></th>
+              <th onclick="sortTable('partner')">Partner <span class="sort-icon">↕</span></th>
+              <th onclick="sortTable('value')">Status <span class="sort-icon">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+// ==================== DATA ====================
+const RAW_DATA = [{"country": "Austria", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Austria", "theme": "National implementation body in place.", "partner": "MS action", "value": "g"}, {"country": "Austria", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Austria", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Austria", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Austria", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Austria", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "g"}, {"country": "Austria", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Austria", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "g"}, {"country": "Austria", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Austria", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Austria", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Austria", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Belgium", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Belgium", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Belgium", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Belgium", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Belgium", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Belgium", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "r"}, {"country": "Belgium", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "r"}, {"country": "Belgium", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Belgium", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Belgium", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Belgium", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Belgium", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Belgium", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Bulgaria", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Bulgaria", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Bulgaria", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Bulgaria", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Bulgaria", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Bulgaria", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Bulgaria", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "g"}, {"country": "Bulgaria", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Bulgaria", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "y"}, {"country": "Bulgaria", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Bulgaria", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Bulgaria", "theme": "Operational engaged", "partner": "UNICEF", "value": "g"}, {"country": "Bulgaria", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Croatia", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Croatia", "theme": "National implementation body in place.", "partner": "MS action", "value": "r"}, {"country": "Croatia", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Croatia", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Croatia", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "y"}, {"country": "Croatia", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Croatia", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Croatia", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Croatia", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Croatia", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Croatia", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Cyprus", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Cyprus", "theme": "National implementation body in place.", "partner": "MS action", "value": "r"}, {"country": "Cyprus", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Cyprus", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Cyprus", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Cyprus", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "r"}, {"country": "Cyprus", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Cyprus", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Cyprus", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Cyprus", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Cyprus", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Czechia", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Czechia", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Czechia", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Czechia", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Czechia", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Czechia", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Czechia", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "g"}, {"country": "Czechia", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Czechia", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Czechia", "theme": "Operational engaged", "partner": "EUAA", "value": "y"}, {"country": "Czechia", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Czechia", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Czechia", "theme": "Operational engaged", "partner": "ICMPD", "value": "g"}, {"country": "Estonia", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Estonia", "theme": "National implementation body in place.", "partner": "MS action", "value": "g"}, {"country": "Estonia", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Estonia", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Estonia", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "r"}, {"country": "Estonia", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Estonia", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Estonia", "theme": "Operational engaged", "partner": "EUAA", "value": "y"}, {"country": "Estonia", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Estonia", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Estonia", "theme": "Operational engaged", "partner": "ICMPD", "value": "g"}, {"country": "Finland", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Finland", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Finland", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Finland", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Finland", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Finland", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "r"}, {"country": "Finland", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "g"}, {"country": "Finland", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Finland", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Finland", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Finland", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Finland", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Finland", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "France", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "France", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "France", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "France", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "France", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "France", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "France", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "France", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "France", "theme": "Operational engaged", "partner": "IOM", "value": "g"}, {"country": "France", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "France", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Germany", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Germany", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Germany", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Germany", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Germany", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Germany", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Germany", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Germany", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "y"}, {"country": "Germany", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Germany", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Germany", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Germany", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Greece", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Greece", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Greece", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Greece", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "y"}, {"country": "Greece", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Greece", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Greece", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Greece", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Greece", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "g"}, {"country": "Greece", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Greece", "theme": "Operational engaged", "partner": "IOM", "value": "g"}, {"country": "Greece", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Greece", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Hungary", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Hungary", "theme": "National implementation body in place.", "partner": "MS action", "value": "r"}, {"country": "Hungary", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "r"}, {"country": "Hungary", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "r"}, {"country": "Hungary", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Hungary", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "y"}, {"country": "Hungary", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "r"}, {"country": "Hungary", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Hungary", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Hungary", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Hungary", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Hungary", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Hungary", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Ireland", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Ireland", "theme": "National implementation body in place.", "partner": "MS action", "value": "g"}, {"country": "Ireland", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Ireland", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "y"}, {"country": "Ireland", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Ireland", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Ireland", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Ireland", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Ireland", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "g"}, {"country": "Ireland", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Ireland", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Ireland", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Ireland", "theme": "Operational engaged", "partner": "ICMPD", "value": "g"}, {"country": "Italy", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Italy", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Italy", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Italy", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Italy", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Italy", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Italy", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Italy", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "g"}, {"country": "Italy", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Italy", "theme": "Operational engaged", "partner": "IOM", "value": "g"}, {"country": "Italy", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Italy", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Latvia", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Latvia", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Latvia", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Latvia", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Latvia", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Latvia", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "r"}, {"country": "Latvia", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Latvia", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Latvia", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Latvia", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Latvia", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Latvia", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Latvia", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Lithuania", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Lithuania", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Lithuania", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Lithuania", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Lithuania", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Lithuania", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Lithuania", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Lithuania", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Lithuania", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Lithuania", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Lithuania", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Lithuania", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Lithuania", "theme": "Operational engaged", "partner": "ICMPD", "value": "g"}, {"country": "Luxembourg", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Luxembourg", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Luxembourg", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Luxembourg", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Luxembourg", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Luxembourg", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "r"}, {"country": "Luxembourg", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Luxembourg", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Luxembourg", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Luxembourg", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Luxembourg", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Luxembourg", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Luxembourg", "theme": "Operational engaged", "partner": "ICMPD", "value": "g"}, {"country": "Malta", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "y"}, {"country": "Malta", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Malta", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Malta", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Malta", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "r"}, {"country": "Malta", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "y"}, {"country": "Malta", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Malta", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "y"}, {"country": "Malta", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "y"}, {"country": "Malta", "theme": "Operational engaged", "partner": "EUAA", "value": "y"}, {"country": "Malta", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Malta", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Malta", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Netherlands", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Netherlands", "theme": "National implementation body in place.", "partner": "MS action", "value": "g"}, {"country": "Netherlands", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Netherlands", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Netherlands", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "r"}, {"country": "Netherlands", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "r"}, {"country": "Netherlands", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Netherlands", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Netherlands", "theme": "Operational engaged", "partner": "EUAA", "value": "y"}, {"country": "Netherlands", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Netherlands", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Netherlands", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Poland", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Poland", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Poland", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Poland", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Poland", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Poland", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Poland", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "g"}, {"country": "Poland", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Poland", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Poland", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Poland", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Poland", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Poland", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Portugal", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Portugal", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Portugal", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Portugal", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Portugal", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Portugal", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Portugal", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Portugal", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Portugal", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Portugal", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Portugal", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Romania", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Romania", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Romania", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Romania", "theme": "Ombudsman office will act as Independent National Monitoring Mechanism", "partner": "MS action", "value": "g"}, {"country": "Romania", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Romania", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "r"}, {"country": "Romania", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "r"}, {"country": "Romania", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Romania", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Romania", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Romania", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Romania", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Romania", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Slovakia", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Slovakia", "theme": "National implementation body in place.", "partner": "MS action", "value": "y"}, {"country": "Slovakia", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Slovakia", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Slovakia", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Slovakia", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Slovakia", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "y"}, {"country": "Slovakia", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Slovakia", "theme": "Operational engaged", "partner": "IOM", "value": "g"}, {"country": "Slovakia", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Slovakia", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Slovenia", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Slovenia", "theme": "National implementation body in place.", "partner": "MS action", "value": "g"}, {"country": "Slovenia", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Slovenia", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "y"}, {"country": "Slovenia", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "y"}, {"country": "Slovenia", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Slovenia", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "y"}, {"country": "Slovenia", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Slovenia", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Slovenia", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Slovenia", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Spain", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "g"}, {"country": "Spain", "theme": "National implementation body in place.", "partner": "MS action", "value": "g"}, {"country": "Spain", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Spain", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Spain", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "g"}, {"country": "Spain", "theme": "UNHCR support requested to INMM.", "partner": "UNHCR", "value": "y"}, {"country": "Spain", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Spain", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "r"}, {"country": "Spain", "theme": "Operational engaged", "partner": "EUAA", "value": "g"}, {"country": "Spain", "theme": "Operational engaged", "partner": "IOM", "value": "g"}, {"country": "Spain", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Spain", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}, {"country": "Sweden", "theme": "National Implementation Plan Published", "partner": "MS action", "value": "r"}, {"country": "Sweden", "theme": "National implementation body in place.", "partner": "MS action", "value": "r"}, {"country": "Sweden", "theme": "Draft legislation being prepared", "partner": "MS action", "value": "g"}, {"country": "Sweden", "theme": "UNHCR recommendations shared", "partner": "MS action", "value": "g"}, {"country": "Sweden", "theme": "Institutional Capacity Building", "partner": "UNHCR", "value": "y"}, {"country": "Sweden", "theme": "Advocacy UNHCR", "partner": "UNHCR", "value": "g"}, {"country": "Sweden", "theme": "EU/AMIF funding", "partner": "UNHCR", "value": "y"}, {"country": "Sweden", "theme": "Operational engaged", "partner": "EUAA", "value": "r"}, {"country": "Sweden", "theme": "Operational engaged", "partner": "IOM", "value": "r"}, {"country": "Sweden", "theme": "Operational engaged", "partner": "UNICEF", "value": "r"}, {"country": "Sweden", "theme": "Operational engaged", "partner": "ICMPD", "value": "r"}];
+const COMMENTS = {"Austria": ["UNHCR engages regularly with implementation body", "UNHCR support to identification of vulnerable persons and follow-up. AMIF funded."], "Bulgaria": ["Working Groups of relevant authorities formed", "Support on vulnerability screening together with Frontex FRO.", "UNHCR has MOU with Ombudsman on supporting the INMM. UNHCR also advising on securing funding from EU (BMVI/AMIF), Swiss, Norway.", "UNICEF AMIF funding for alternative care arrangements."], "Croatia": ["Significant delays in Pact implementation reported including on Eurodac and identification of sites for border/screening procedures.", "UNHCR is a member of the Advisory Board of the INMM established in 2021."], "Cyprus": ["UNHCR has recommended involvement of IO\u2019s and other key actors in the design of the INMM and has shared recommendations"], "Czechia": ["Legislation adopted", "ICMPD TSI Project until mid- 2026"], "Estonia": ["ICMPD TSI Project Support on solidarity mechanisms and safeguards for vulnerable persons."], "France": ["An existing national entity to act as INMM \u2013 unclear which", "IOM Support to resettlement. Might support labour mobility."], "Germany": ["UNHCR has proposed to undertake a quality review of decision practice in the new border procedures (AMIF direct funding from BAMF). MOI engaging with National Human Rights Institution and the NPM on options to establish an INMM. UNHCR has shared recommendations. UNHCR has submitted a quality review proposal (see below)"], "Greece": ["TSI funding until June 2026. Focus on minors and youth in Pact implementation. Proposal for AMIF funding shared with authorities on Screening & Info provision, legal counselling and simplified asylum procedures."], "Hungary": ["Training of border and migration authorities on the identification of vulnerabilities. [May or may not be related to possible Pact implementation]."], "Ireland": ["Bilateral funding for quality project with first and second instance bodies."], "Italy": ["Applications submitted for AMIF funding"], "Lithuania": ["ICMPD providing support on pact implementation"]};
+
+const VALUE_LABELS = { g: 'In Place', y: 'Partially in Place', r: 'Not in Place' };
+const VALUE_ORDER = { g: 0, y: 1, r: 2 };
+
+const PARTNERS = [...new Set(RAW_DATA.map(d => d.partner))].sort();
+const THEMES = [...new Set(RAW_DATA.map(d => d.theme))].sort();
+const COUNTRIES = [...new Set(RAW_DATA.map(d => d.country))].sort();
+
+// ISO numeric codes for EU-27 countries (Natural Earth / world-atlas)
+const COUNTRY_ISO = {
+  'Austria': '40', 'Belgium': '56', 'Bulgaria': '100', 'Croatia': '191',
+  'Cyprus': '196', 'Czechia': '203', 'Estonia': '233', 'Finland': '246',
+  'France': '250', 'Germany': '276', 'Greece': '300', 'Hungary': '348',
+  'Ireland': '372', 'Italy': '380', 'Latvia': '428', 'Lithuania': '440',
+  'Luxembourg': '442', 'Malta': '470', 'Netherlands': '528', 'Poland': '616',
+  'Portugal': '620', 'Romania': '642', 'Slovakia': '703', 'Slovenia': '705',
+  'Spain': '724', 'Sweden': '752'
+};
+const ISO_TO_COUNTRY = Object.fromEntries(Object.entries(COUNTRY_ISO).map(([k,v]) => [v, k]));
+
+// ==================== STATE ====================
+let state = {
+  partner: '',
+  theme: '',
+  selectedCountry: null,
+  view: 'map',
+  tablePage: 1,
+  tablePageSize: 15,
+  tableSort: { col: 'country', dir: 1 },
+  tableFilter: '',
+  heatmapPartner: PARTNERS[0] || ''
+};
+
+// ==================== FILTERS ====================
+function buildFilters() {
+  // Partner buttons
+  const pf = document.getElementById('partner-filters');
+  pf.innerHTML = '';
+  const allBtn = document.createElement('button');
+  allBtn.className = 'filter-btn active';
+  allBtn.textContent = 'All';
+  allBtn.dataset.val = '';
+  allBtn.onclick = () => setPartner('');
+  pf.appendChild(allBtn);
+  PARTNERS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.textContent = p;
+    btn.dataset.val = p;
+    btn.onclick = () => setPartner(p);
+    pf.appendChild(btn);
+  });
+
+  // Theme select
+  const ts = document.getElementById('theme-filter');
+  THEMES.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    ts.appendChild(opt);
+  });
+  ts.onchange = () => { state.theme = ts.value; update(); };
+
+  // Heatmap partner tabs
+  const hpt = document.getElementById('heatmap-partner-tabs');
+  hpt.innerHTML = '';
+  PARTNERS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (p === state.heatmapPartner ? ' active' : '');
+    btn.textContent = p;
+    btn.onclick = () => {
+      state.heatmapPartner = p;
+      document.querySelectorAll('#heatmap-partner-tabs .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderHeatmap();
+    };
+    hpt.appendChild(btn);
+  });
+}
+
+function setPartner(p) {
+  state.partner = p;
+  document.querySelectorAll('#partner-filters .filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.val === p);
+  });
+  update();
+}
+
+function resetFilters() {
+  state.partner = '';
+  state.theme = '';
+  state.selectedCountry = null;
+  document.getElementById('theme-filter').value = '';
+  document.querySelectorAll('#partner-filters .filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.val === '');
+  });
+  update();
+}
+
+function switchView(v) {
+  state.view = v;
+  ['map','heatmap','table','notes'].forEach(id => {
+    document.getElementById('view-' + id)?.classList.toggle('active', v === id);
+  });
+  document.getElementById('map-view').style.display = v === 'map' ? '' : 'none';
+  document.getElementById('detail-card').style.display = v === 'map' ? '' : 'none';
+  document.getElementById('heatmap-view').style.display = v === 'heatmap' ? '' : 'none';
+  document.getElementById('table-view').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('notes-view').style.display = v === 'notes' ? '' : 'none';
+  if (v === 'heatmap') renderHeatmap();
+  if (v === 'table') renderTable();
+  if (v === 'notes') renderNotes();
+}
+
+// ==================== DATA HELPERS ====================
+function getFiltered() {
+  return RAW_DATA.filter(d =>
+    (!state.partner || d.partner === state.partner) &&
+    (!state.theme || d.theme === state.theme)
+  );
+}
+
+function getCountryScore(country, data) {
+  const rows = data.filter(d => d.country === country);
+  if (!rows.length) return null;
+  const scores = rows.map(d => d.value === 'g' ? 2 : d.value === 'y' ? 1 : 0);
+  const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+  if (avg >= 1.25) return 'g';
+  if (avg >= 0.5) return 'y';
+  return 'r';
+}
+
+function getCountrySingleValue(country, data) {
+  const rows = data.filter(d => d.country === country);
+  if (!rows.length) return null;
+  if (rows.length === 1) return rows[0].value;
+  return getCountryScore(country, data);
+}
+
+function statusBadge(v) {
+  if (!v) return '<span style="color:#bdc3c7;font-size:0.72rem;">—</span>';
+  const labels = { g: 'In Place', y: 'Partial', r: 'Not in Place' };
+  return `<span class="status-badge status-${v}"><span class="status-dot dot-${v}"></span>${labels[v]}</span>`;
+}
+
+// ==================== STATS ====================
+function updateStats() {
+  const data = getFiltered();
+  const g = data.filter(d => d.value === 'g').length;
+  const y = data.filter(d => d.value === 'y').length;
+  const r = data.filter(d => d.value === 'r').length;
+  document.getElementById('stat-green').textContent = g;
+  document.getElementById('stat-yellow').textContent = y;
+  document.getElementById('stat-red').textContent = r;
+  const countries = new Set(data.map(d => d.country)).size;
+  document.getElementById('stat-countries').textContent = countries || 26;
+}
+
+// ==================== MAP ====================
+let svgMap = null;
+let projection = null;
+
+async function initMap() {
+  const container = document.getElementById('map-container');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  projection = d3.geoAzimuthalEqualArea()
+    .rotate([-15, -52])
+    .center([0, 0])
+    .scale(Math.min(W, H) * 1.45)
+    .translate([W * 0.46, H * 0.52]);
+
+  const path = d3.geoPath().projection(projection);
+
+  svgMap = d3.select('#map-container').append('svg')
+    .attr('width', W)
+    .attr('height', H);
+
+  // Ocean background
+  svgMap.append('rect').attr('width', W).attr('height', H).attr('fill', '#cce8f7');
+
+  const world = await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+  const countries = topojson.feature(world, world.objects.countries);
+
+  const tooltip = document.getElementById('tooltip');
+
+  svgMap.selectAll('.country-path')
+    .data(countries.features)
+    .join('path')
+    .attr('class', d => {
+      const iso = d.id?.toString();
+      const country = ISO_TO_COUNTRY[iso];
+      return 'country-path' + (country ? '' : ' no-data');
+    })
+    .attr('d', path)
+    .attr('fill', d => {
+      const iso = d.id?.toString();
+      const country = ISO_TO_COUNTRY[iso];
+      if (!country) return '#d5dce3';
+      const score = getCountryScore(country, getFiltered());
+      return score === 'g' ? '#2ecc71' : score === 'y' ? '#f1c40f' : score === 'r' ? '#e74c3c' : '#d5dce3';
+    })
+    .on('mousemove', (event, d) => {
+      const iso = d.id?.toString();
+      const country = ISO_TO_COUNTRY[iso];
+      if (!country) return;
+      const data = getFiltered().filter(r => r.country === country);
+      const g = data.filter(r => r.value === 'g').length;
+      const y = data.filter(r => r.value === 'y').length;
+      const r = data.filter(r => r.value === 'r').length;
+      tooltip.style.display = 'block';
+      tooltip.style.left = (event.clientX + 14) + 'px';
+      tooltip.style.top = (event.clientY - 10) + 'px';
+      tooltip.innerHTML = `
+        <div class="tt-country">${country}</div>
+        <div class="tt-stat"><span style="color:#2ecc71">●</span> ${g} in place</div>
+        <div class="tt-stat"><span style="color:#f1c40f">●</span> ${y} partial</div>
+        <div class="tt-stat"><span style="color:#e74c3c">●</span> ${r} not in place</div>
+        ${state.partner ? `<div style="margin-top:4px;opacity:0.7;font-size:0.68rem">Partner: ${state.partner}</div>` : ''}
+        ${state.theme ? `<div style="opacity:0.7;font-size:0.65rem;max-width:160px;word-break:break-word">Theme: ${state.theme}</div>` : ''}
+      `;
+    })
+    .on('mouseleave', () => { tooltip.style.display = 'none'; })
+    .on('click', (event, d) => {
+      const iso = d.id?.toString();
+      const country = ISO_TO_COUNTRY[iso];
+      if (!country) return;
+      selectCountry(country);
+    });
+}
+
+function updateMapColors() {
+  if (!svgMap) return;
+  const filtered = getFiltered();
+  svgMap.selectAll('.country-path')
+    .transition().duration(300)
+    .attr('fill', d => {
+      const iso = d.id?.toString();
+      const country = ISO_TO_COUNTRY[iso];
+      if (!country) return '#d5dce3';
+      const score = getCountryScore(country, filtered);
+      return score === 'g' ? '#2ecc71' : score === 'y' ? '#f1c40f' : score === 'r' ? '#e74c3c' : '#d5dce3';
+    });
+
+  // Update active country border
+  svgMap.selectAll('.country-path')
+    .classed('active-country', d => {
+      const iso = d.id?.toString();
+      return ISO_TO_COUNTRY[iso] === state.selectedCountry;
+    });
+
+  // Update subtitle
+  const parts = [];
+  if (state.partner) parts.push(`Partner: ${state.partner}`);
+  else parts.push('All partners');
+  if (state.theme) parts.push(`Theme: ${state.theme.substring(0, 35)}${state.theme.length > 35 ? '…' : ''}`);
+  else parts.push('All themes');
+  document.getElementById('map-subtitle').textContent = parts.join(' · ');
+}
+
+// ==================== COUNTRY DETAIL ====================
+function selectCountry(country) {
+  state.selectedCountry = country;
+  updateMapColors();
+
+  const allData = RAW_DATA.filter(d => d.country === country);
+  const filteredData = getFiltered().filter(d => d.country === country);
+
+  document.getElementById('detail-placeholder').style.display = 'none';
+  document.getElementById('detail-content').style.display = 'block';
+  document.getElementById('detail-country-name').textContent = `🌍 ${country}`;
+
+  const wrap = document.getElementById('detail-table-wrap');
+  wrap.innerHTML = '';
+
+  // Group by partner
+  const partnerGroups = {};
+  allData.forEach(d => {
+    if (!partnerGroups[d.partner]) partnerGroups[d.partner] = [];
+    partnerGroups[d.partner].push(d);
+  });
+
+  // Summary progress bar
+  const total = allData.length;
+  const g = allData.filter(d => d.value === 'g').length;
+  const y = allData.filter(d => d.value === 'y').length;
+  const r = allData.filter(d => d.value === 'r').length;
+  const pct = v => Math.round(v / total * 100);
+
+  wrap.innerHTML += `
+    <div style="padding:8px 0 12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:0.72rem">
+        <span style="color:var(--green-dark);font-weight:600">✅ ${g} in place</span>
+        <span style="color:var(--yellow-dark);font-weight:600">⚠️ ${y} partial</span>
+        <span style="color:var(--red-dark);font-weight:600">❌ ${r} not in place</span>
+      </div>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#f0f3f6">
+        <div style="width:${pct(g)}%;background:var(--green);transition:width 0.3s"></div>
+        <div style="width:${pct(y)}%;background:var(--yellow);transition:width 0.3s"></div>
+        <div style="width:${pct(r)}%;background:var(--red);transition:width 0.3s"></div>
+      </div>
+    </div>
+  `;
+
+  // Filter indicator
+  const activeFilters = [];
+  if (state.partner) activeFilters.push(`Partner: ${state.partner}`);
+  if (state.theme) activeFilters.push(`Theme: ${state.theme.substring(0,30)}…`);
+  if (activeFilters.length) {
+    wrap.innerHTML += `<div style="font-size:0.68rem;color:var(--primary-light);background:#eaf4fb;padding:4px 8px;border-radius:6px;margin-bottom:8px">Filter: ${activeFilters.join(' · ')}</div>`;
+  }
+
+  // Table per partner
+  Object.entries(partnerGroups).forEach(([partner, rows]) => {
+    const isFiltered = state.partner && state.partner !== partner;
+    wrap.innerHTML += `<div class="detail-section-title" style="${isFiltered ? 'opacity:0.35' : ''}">${partner}</div>`;
+    let tbl = `<table class="detail-table" style="${isFiltered ? 'opacity:0.35' : ''}"><thead><tr><th>Theme</th><th>Status</th></tr></thead><tbody>`;
+    rows.forEach(row => {
+      const dimmed = state.theme && state.theme !== row.theme;
+      tbl += `<tr style="${dimmed ? 'opacity:0.3' : ''}">
+        <td class="theme-cell">${row.theme}</td>
+        <td>${statusBadge(row.value)}</td>
+      </tr>`;
+    });
+    tbl += '</tbody></table>';
+    wrap.innerHTML += tbl;
+  });
+
+  // Comments
+  const cmts = COMMENTS[country];
+  if (cmts && cmts.length) {
+    wrap.innerHTML += `<div class="detail-section-title" style="margin-top:14px">💬 Notes</div>`;
+    cmts.forEach(c => {
+      wrap.innerHTML += `<div class="comment-item">${c}</div>`;
+    });
+  }
+}
+
+// ==================== HEATMAP ====================
+function renderHeatmap() {
+  const partner = state.heatmapPartner;
+  const themes = THEMES;
+  const tbl = document.getElementById('heatmap-table');
+
+  // Build lookup
+  const lookup = {};
+  RAW_DATA.filter(d => d.partner === partner).forEach(d => {
+    lookup[`${d.country}||${d.theme}`] = d.value;
+  });
+
+  const labels = { g: 'In Place', y: 'Partially in Place', r: 'Not in Place' };
+  const symbols = { g: '✓', y: '~', r: '✗' };
+
+  // Header row
+  let html = '<thead><tr>';
+  html += `<th class="hm-corner">Country</th>`;
+  themes.forEach(t => {
+    html += `<th class="hm-theme" title="${t}"><span class="hm-theme-inner">${t}</span></th>`;
+  });
+  html += '</tr></thead>';
+
+  // Body rows
+  html += '<tbody>';
+  COUNTRIES.forEach(country => {
+    const hasNote = !!COMMENTS[country];
+    const safeCountry = country.replace(/'/g, "\\'");
+    const noteTag = hasNote ? `<span class="hm-has-note" title="Has notes">💬</span>` : '';
+    html += `<tr>`;
+    html += `<td class="hm-country" onclick="switchView('map');selectCountry('${safeCountry}')" title="Click to view ${country} on map">${country}${noteTag}</td>`;
+    themes.forEach(theme => {
+      const val = lookup[`${country}||${theme}`];
+      if (val) {
+        html += `<td class="hm-cell cell-${val}" title="${country}: ${theme} — ${labels[val]}">${symbols[val]}</td>`;
+      } else {
+        html += `<td class="hm-cell cell-empty" title="${country}: ${theme} — No data">–</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+
+  tbl.innerHTML = html;
+}
+
+// ==================== NOTES ====================
+function renderNotes() {
+  const grid = document.getElementById('notes-grid');
+  const count = Object.keys(COMMENTS).length;
+  document.getElementById('notes-count').textContent = `${count} countries with notes`;
+
+  let html = '';
+  Object.entries(COMMENTS).sort((a, b) => a[0].localeCompare(b[0])).forEach(([country, notes]) => {
+    html += `<div class="note-country-card">
+      <div class="note-country-header">
+        🌍 ${country}
+        <span style="margin-left:auto;font-size:0.68rem;font-weight:400;color:var(--text-muted)">${notes.length} note${notes.length > 1 ? 's' : ''}</span>
+      </div>
+      <div class="note-country-body">
+        ${notes.map(n => `<div class="note-item">${n}</div>`).join('')}
+      </div>
+    </div>`;
+  });
+  grid.innerHTML = html;
+}
+
+// ==================== TABLE ====================
+let tableData = [];
+
+function filterTable() {
+  state.tableFilter = document.getElementById('table-search').value.toLowerCase();
+  state.tablePage = 1;
+  renderTableBody();
+}
+
+function sortTable(col) {
+  if (state.tableSort.col === col) state.tableSort.dir *= -1;
+  else { state.tableSort.col = col; state.tableSort.dir = 1; }
+  document.querySelectorAll('table.data-table th').forEach(th => th.classList.remove('sorted'));
+  const thIdx = { country: 0, theme: 1, partner: 2, value: 3 };
+  document.querySelectorAll('table.data-table th')[thIdx[col]]?.classList.add('sorted');
+  renderTableBody();
+}
+
+function changePage(delta) {
+  const filtered = getTableFiltered();
+  const maxPage = Math.ceil(filtered.length / state.tablePageSize);
+  state.tablePage = Math.max(1, Math.min(maxPage, state.tablePage + delta));
+  renderTableBody();
+}
+
+function getTableFiltered() {
+  const q = state.tableFilter;
+  let rows = getFiltered();
+  if (q) rows = rows.filter(d =>
+    d.country.toLowerCase().includes(q) ||
+    d.theme.toLowerCase().includes(q) ||
+    d.partner.toLowerCase().includes(q) ||
+    VALUE_LABELS[d.value].toLowerCase().includes(q)
+  );
+  const col = state.tableSort.col;
+  const dir = state.tableSort.dir;
+  rows = [...rows].sort((a, b) => {
+    let av = a[col], bv = b[col];
+    if (col === 'value') { av = VALUE_ORDER[av]; bv = VALUE_ORDER[bv]; return (av - bv) * dir; }
+    return av.localeCompare(bv) * dir;
+  });
+  return rows;
+}
+
+function renderTable() {
+  renderTableBody();
+}
+
+function renderTableBody() {
+  const filtered = getTableFiltered();
+  const total = filtered.length;
+  const start = (state.tablePage - 1) * state.tablePageSize;
+  const page = filtered.slice(start, start + state.tablePageSize);
+  const maxPage = Math.ceil(total / state.tablePageSize);
+
+  document.getElementById('table-count').textContent = `(${total} rows)`;
+  document.getElementById('pager-info').textContent = `${state.tablePage} / ${maxPage || 1}`;
+  document.getElementById('prev-btn').disabled = state.tablePage <= 1;
+  document.getElementById('next-btn').disabled = state.tablePage >= maxPage;
+
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = page.map(d => `
+    <tr>
+      <td style="font-weight:500">${d.country}</td>
+      <td>${d.theme}</td>
+      <td><span style="font-size:0.72rem;background:#f0f4f8;padding:2px 8px;border-radius:4px;font-weight:500">${d.partner}</span></td>
+      <td>${statusBadge(d.value)}</td>
+    </tr>
+  `).join('');
+}
+
+// ==================== MAIN UPDATE ====================
+function update() {
+  updateStats();
+  updateMapColors();
+  if (state.selectedCountry) selectCountry(state.selectedCountry);
+  if (state.view === 'heatmap') renderHeatmap();
+  if (state.view === 'table') renderTable();
+  if (state.view === 'notes') renderNotes();
+}
+
+// ==================== INIT ====================
+buildFilters();
+updateStats();
+initMap().then(() => updateMapColors());
+</script>
+
+
+
+
+<div style="max-width:1600px;margin:0 auto;padding:0 32px 32px">
+  <div style="background:white;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:20px 28px">
+    <div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#1a3a5c;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      How Map Colors Are Calculated
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;font-size:0.78rem;color:#2c3e50;line-height:1.6">
+      <div>
+        <p style="margin-bottom:10px">When <strong>All Partners</strong> and <strong>All Themes</strong> are selected, the map color for each country is determined by computing a <strong>weighted average score</strong> across all its data rows:</p>
+        <table style="border-collapse:collapse;font-size:0.75rem;margin-bottom:10px">
+          <thead>
+            <tr>
+              <th style="background:#f0f4f8;padding:6px 14px;border:1px solid #dde3ea;font-weight:600;color:#7f8c8d;text-transform:uppercase;font-size:0.65rem">Status</th>
+              <th style="background:#f0f4f8;padding:6px 14px;border:1px solid #dde3ea;font-weight:600;color:#7f8c8d;text-transform:uppercase;font-size:0.65rem">Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="padding:5px 14px;border:1px solid #f0f3f6"><span style="display:inline-flex;align-items:center;gap:5px;background:#e8faf0;color:#1a7a4a;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:600"><span style="width:6px;height:6px;border-radius:50%;background:#2ecc71;display:inline-block"></span>In Place</span></td><td style="padding:5px 14px;border:1px solid #f0f3f6;font-weight:700;text-align:center">2</td></tr>
+            <tr><td style="padding:5px 14px;border:1px solid #f0f3f6"><span style="display:inline-flex;align-items:center;gap:5px;background:#fef9e7;color:#9a7d0a;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:600"><span style="width:6px;height:6px;border-radius:50%;background:#f1c40f;display:inline-block"></span>Partially in Place</span></td><td style="padding:5px 14px;border:1px solid #f0f3f6;font-weight:700;text-align:center">1</td></tr>
+            <tr><td style="padding:5px 14px;border:1px solid #f0f3f6"><span style="display:inline-flex;align-items:center;gap:5px;background:#fdecea;color:#a93226;padding:2px 8px;border-radius:20px;font-size:0.7rem;font-weight:600"><span style="width:6px;height:6px;border-radius:50%;background:#e74c3c;display:inline-block"></span>Not in Place</span></td><td style="padding:5px 14px;border:1px solid #f0f3f6;font-weight:700;text-align:center">0</td></tr>
+          </tbody>
+        </table>
+        <p>The average of all scores is then mapped to a final color:</p>
+        <div style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
+          <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:3px;background:#2ecc71;flex-shrink:0"></div><span><strong>Average ≥ 1.25</strong> → Green (mostly in place)</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border-radius:3px;background:#f1c40f;flex-shrink:0"></div><span><strong>Average ≥ 0.5</strong> → Yellow (mixed / partial)</span></div>
+          <div style="display:flex;align-items:center;gap:10px"><div style="width:14px;height:14px;border-radius:3px;background:#e74c3c;flex-shrink:0"></div><span><strong>Average &lt; 0.5</strong> → Red (mostly not in place)</span></div>
+        </div>
+      </div>
+      <div>
+        <p style="margin-bottom:10px"><strong>Example — Austria (all filters active):</strong><br>Austria has 13 rows: 9 green, 0 yellow, 4 red.</p>
+        <div style="background:#f8fafc;border-radius:8px;padding:12px 16px;font-family:monospace;font-size:0.75rem;line-height:1.8;border:1px solid #dde3ea">
+          score = (9 × 2 + 0 × 1 + 4 × 0) / 13<br>
+          score = 18 / 13 = <strong>1.38</strong><br>
+          1.38 ≥ 1.25 → <span style="color:#27ae60;font-weight:700">Green</span>
+        </div>
+        <p style="margin-top:12px;color:#7f8c8d">When a <strong>Partner</strong> or <strong>Theme</strong> filter is active, only the matching rows are used in the calculation — so the map updates dynamically to reflect the filtered selection.</p>
+        <p style="margin-top:8px;color:#7f8c8d">When both a Partner and a Theme are selected and only one row matches per country, the color maps directly: green → green, yellow → yellow, red → red.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
