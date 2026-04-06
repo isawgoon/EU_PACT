@@ -983,7 +983,8 @@ const DISPUTED_BBOX = [
 ];
 
 function resolveCountry(feature) {
-  const iso = feature.id?.toString();
+  // Normalize to strip leading zeros (world-atlas stores IDs as zero-padded 3-digit strings)
+  const iso = feature.id != null ? String(parseInt(String(feature.id), 10)) : undefined;
   const direct = ISO_TO_COUNTRY[iso];
   if (direct) return direct;
   // Fallback: check geographic centroid against known disputed territory boxes
@@ -1101,7 +1102,7 @@ function onMapCountrySelect(country) {
   selectCountry(country);
   // Pan & zoom to the selected country path
   const node = svgMapG.selectAll('.country-path')
-    .filter(d => ISO_TO_COUNTRY[d.id?.toString()] === country)
+    .filter(d => ISO_TO_COUNTRY[d.id != null ? String(parseInt(String(d.id), 10)) : undefined] === country)
     .node();
   if (!node) return;
   const container = document.getElementById('map-container');
