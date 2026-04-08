@@ -856,7 +856,7 @@
   </header>
 
   <div class="filters-bar">
-    <span class="filter-label">Partner</span>
+    <span class="filter-label">Entity</span>
     <div class="filter-group" id="partner-filters"></div>
     <div class="filter-divider"></div>
     <span class="filter-label">Theme</span>
@@ -929,7 +929,7 @@
           style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:5;gap:8px;pointer-events:none">
           <div
             style="background:rgba(26,58,92,0.82);color:white;padding:13px 22px;border-radius:10px;font-size:0.84rem;font-weight:500;text-align:center;backdrop-filter:blur(4px);box-shadow:0 4px 16px rgba(0,0,0,0.18)">
-            Select a <strong>Partner</strong> above to view activity data on the map
+            Select an <strong>Entity</strong> above to view activity data on the map
           </div>
         </div>
         <div class="map-zoom-controls">
@@ -1013,7 +1013,7 @@
           <span id="table-count" style="font-size:0.7rem;font-weight:500;color:var(--text-muted)"></span>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="text" class="table-search" id="table-search" placeholder="Search country, theme, partner…"
+          <input type="text" class="table-search" id="table-search" placeholder="Search country, theme, entity…"
             oninput="filterTable()">
           <div class="pager">
             <button class="pager-btn" id="prev-btn" onclick="changePage(-1)">‹ Prev</button>
@@ -1029,7 +1029,7 @@
               <tr>
                 <th onclick="sortTable('country')">Country <span class="sort-icon">↕</span></th>
                 <th onclick="sortTable('theme')">Theme <span class="sort-icon">↕</span></th>
-                <th onclick="sortTable('partner')">Partner <span class="sort-icon">↕</span></th>
+                <th onclick="sortTable('partner')">Entity <span class="sort-icon">↕</span></th>
                 <th onclick="sortTable('value')">Status <span class="sort-icon">↕</span></th>
               </tr>
             </thead>
@@ -1105,16 +1105,21 @@
         ts.disabled = true;
         const opt = document.createElement('option');
         opt.value = '';
-        opt.textContent = '— Select a partner first —';
+        opt.textContent = '— Select an entity first —';
         ts.appendChild(opt);
         return;
       }
       ts.disabled = false;
       const partnerThemes = [...new Set(RAW_DATA.filter(d => d.partner === state.partner).map(d => d.theme))].sort();
-      const placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = '— Select a theme —';
-      ts.appendChild(placeholder);
+      if (partnerThemes.length === 1) {
+        // Only one theme — auto-select it, no placeholder needed
+        state.theme = partnerThemes[0];
+      } else {
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '— Select a theme —';
+        ts.appendChild(placeholder);
+      }
       partnerThemes.forEach(t => {
         const opt = document.createElement('option');
         opt.value = t;
@@ -1289,7 +1294,7 @@
           tooltip.style.left = (event.clientX + 14) + 'px';
           tooltip.style.top = (event.clientY - 10) + 'px';
           if (!state.partner) {
-            tooltip.innerHTML = `<div class="tt-country">${country}</div><div style="opacity:0.7;font-size:0.72rem;margin-top:3px">Select a partner to view data</div>`;
+            tooltip.innerHTML = `<div class="tt-country">${country}</div><div style="opacity:0.7;font-size:0.72rem;margin-top:3px">Select an entity to view data</div>`;
             return;
           }
           if (!state.theme) {
@@ -1383,7 +1388,7 @@
         const msg = overlay.querySelector('div');
         if (msg) {
           if (!state.partner) {
-            msg.innerHTML = 'Select a <strong>Partner</strong> above to view activity data on the map';
+            msg.innerHTML = 'Select an <strong>Entity</strong> above to view activity data on the map';
           } else {
             msg.innerHTML = 'Now select a <strong>Theme</strong> to view data on the map';
           }
@@ -1392,12 +1397,12 @@
 
       // Update subtitle
       if (!state.partner) {
-        document.getElementById('map-subtitle').textContent = 'Select a partner to view map data';
+        document.getElementById('map-subtitle').textContent = 'Select an entity to view map data';
       } else if (!state.theme) {
-        document.getElementById('map-subtitle').textContent = `Partner: ${state.partner} · Select a theme`;
+        document.getElementById('map-subtitle').textContent = `Entity: ${state.partner} · Select a theme`;
       } else {
         const themeLabel = state.theme.length > 35 ? state.theme.substring(0, 35) + '…' : state.theme;
-        document.getElementById('map-subtitle').textContent = `Partner: ${state.partner} · ${themeLabel}`;
+        document.getElementById('map-subtitle').textContent = `Entity: ${state.partner} · ${themeLabel}`;
       }
     }
 
